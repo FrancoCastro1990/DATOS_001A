@@ -102,8 +102,9 @@ ORDER BY
     
     
 ----CASO 3 -----
+DELETE FROM CANT_BONOS_PACIENTES_ANNIO;
 
-
+INSERT INTO CANT_BONOS_PACIENTES_ANNIO
 SELECT 
     EXTRACT(YEAR FROM SYSDATE) AS annio_calculo,
     p.pac_run,
@@ -122,6 +123,7 @@ LEFT JOIN BONO_CONSULTA b ON p.pac_run = b.pac_run
     AND EXTRACT(YEAR FROM b.fecha_bono) = EXTRACT(YEAR FROM SYSDATE)
 WHERE s.tipo_sal_id IN ('F', 'P', 'FA')
     AND p.pac_run IN (
+        ----Lo que logre entender :c
         ----obtener pacientes cuyo monto total no supere el promedio del año anterior--
         SELECT DISTINCT p2.pac_run
         FROM PACIENTE p2
