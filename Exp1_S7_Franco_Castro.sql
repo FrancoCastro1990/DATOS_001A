@@ -88,3 +88,37 @@ FROM v_bonificaciones;
 
 
 SELECT * FROM detalle_bonificaciones_trabajador;
+
+
+--EJERCICIO 2
+-- Creación de sinónimos privados para mejor seguridad
+CREATE OR REPLACE SYNONYM syn_trabajador FOR trabajador;
+CREATE OR REPLACE SYNONYM syn_bono_escolar FOR bono_escolar;
+
+-- Vista de aumentos por estudios
+CREATE OR REPLACE VIEW v_aumentos_estudios AS
+SELECT 
+    LPAD(t.numrut, 10, '0') AS rut_trabajador,
+    INITCAP(t.nombre || ' ' || t.appaterno || ' ' || t.apmaterno) AS trabajador,
+    UPPER(be.descrip) AS nivel_educacion,
+    LPAD(TO_CHAR(be.porc_bono, 'FM000000'), 7, '0') AS pct_estudios,
+    TO_CHAR(t.sueldo_base, 'FM999999999') AS sueldo_actual,
+    TO_CHAR(ROUND(t.sueldo_base * be.porc_bono/100), 'FM999999999') AS aumento,
+    TO_CHAR(ROUND(t.sueldo_base * (1 + be.porc_bono/100)), 'FM999999999') AS sueldo_aumentado
+FROM syn_trabajador t
+JOIN syn_bono_escolar be ON t.id_escolaridad_1 = be.id_escolar
+WHERE t.id_categoria_1 IN (
+    SELECT id_categoria 
+    FROM tipo_trabajador 
+    WHERE UPPER(desc_categoria) = 'CAJERO'
+)
+OR EXISTS (
+    SELECT 1
+    FROM asignacion_familiar af
+    WHERE af.numrut_t = t.numrut
+    GROUP BY af.numrut_t
+    HAVING COUNT(*) BETWEEN 1 AND 2
+)
+ORDER BY t.sueldo_base DESC;
+
+SELECT * FROM v_aumentos_estudios;
