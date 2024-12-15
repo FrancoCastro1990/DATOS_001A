@@ -21,6 +21,8 @@ SELECT * from V_CLIENTES_REGION;
 
 --informe 2
 --SET
+
+-- Transacciones con vencimientos en segundo semestre (Julio-Septiembre)
 SELECT 
     TO_CHAR(SYSDATE, 'DD-MM-YYYY') AS fecha,
     tpt.cod_tptran_tarjeta AS codigo,
@@ -30,9 +32,40 @@ FROM tipo_transaccion_tarjeta tpt
     INNER JOIN transaccion_tarjeta_cliente ttc ON tpt.cod_tptran_tarjeta = ttc.cod_tptran_tarjeta
     INNER JOIN cuota_transac_tarjeta_cliente cttc ON ttc.nro_tarjeta = cttc.nro_tarjeta 
     AND ttc.nro_transaccion = cttc.nro_transaccion
-WHERE EXTRACT(MONTH FROM cttc.fecha_venc_cuota) BETWEEN 6 AND 12
-GROUP BY tpt.cod_tptran_tarjeta, tpt.nombre_tptran_tarjeta
-ORDER BY AVG(ttc.monto_transaccion);
+WHERE EXTRACT(MONTH FROM cttc.fecha_venc_cuota) BETWEEN 7 AND 9
+GROUP BY TO_CHAR(SYSDATE, 'DD-MM-YYYY'), tpt.cod_tptran_tarjeta, tpt.nombre_tptran_tarjeta
+
+MINUS
+
+-- Transacciones con vencimientos en último trimestre (Octubre-Diciembre)
+SELECT 
+    TO_CHAR(SYSDATE, 'DD-MM-YYYY') AS fecha,
+    tpt.cod_tptran_tarjeta AS codigo,
+    tpt.nombre_tptran_tarjeta AS descripcion,
+    ROUND(AVG(ttc.monto_transaccion), 0) AS monto_promedio_transaccion
+FROM tipo_transaccion_tarjeta tpt
+    INNER JOIN transaccion_tarjeta_cliente ttc ON tpt.cod_tptran_tarjeta = ttc.cod_tptran_tarjeta
+    INNER JOIN cuota_transac_tarjeta_cliente cttc ON ttc.nro_tarjeta = cttc.nro_tarjeta 
+    AND ttc.nro_transaccion = cttc.nro_transaccion
+WHERE EXTRACT(MONTH FROM cttc.fecha_venc_cuota) BETWEEN 10 AND 12
+GROUP BY TO_CHAR(SYSDATE, 'DD-MM-YYYY'), tpt.cod_tptran_tarjeta, tpt.nombre_tptran_tarjeta
+
+MINUS
+
+-- Excluimos las transacciones que no tienen vencimientos
+SELECT 
+    TO_CHAR(SYSDATE, 'DD-MM-YYYY') AS fecha,
+    tpt.cod_tptran_tarjeta AS codigo,
+    tpt.nombre_tptran_tarjeta AS descripcion,
+    ROUND(AVG(ttc.monto_transaccion), 0) AS monto_promedio_transaccion
+FROM tipo_transaccion_tarjeta tpt
+INNER JOIN transaccion_tarjeta_cliente ttc ON tpt.cod_tptran_tarjeta = ttc.cod_tptran_tarjeta
+INNER JOIN cuota_transac_tarjeta_cliente cttc ON ttc.nro_tarjeta = cttc.nro_tarjeta 
+    AND ttc.nro_transaccion = cttc.nro_transaccion
+WHERE cttc.fecha_venc_cuota IS NULL
+GROUP BY TO_CHAR(SYSDATE, 'DD-MM-YYYY'), tpt.cod_tptran_tarjeta, tpt.nombre_tptran_tarjeta
+ORDER BY monto_promedio_transaccion;
+
 
 --SUBCONSULTA
 INSERT INTO seleccion_tipo_transaccion
@@ -73,30 +106,39 @@ SELECT * FROM tipo_transaccion_tarjeta;
 --respuestas
 /*
 1. ¿Cuál es el problema que se debe resolver?
-Se debe analizar las transacciones con cuotas que vencen en el segundo semestre del año,
-calculando promedios de montos por tipo de transacción y actualizar tasas de interés.
+Se debe identificar y analizar las transacciones con vencimientos de cuotas en el segundo semestre 
+(julio a diciembre), calculando el monto promedio por tipo de transacción. Se requieren dos soluciones 
+diferentes (una usando SET y otra con subconsultas) para posteriormente actualizar las tasas de interés 
+de los tipos de transacciones identificados.
 
 2. ¿Cuál es la información significativa que necesita para resolver el problema?
-- Fechas de vencimiento de cuotas
-- Montos de transacciones
-- Tipos de transacciones
-- Tasas de interés actuales
+- Fechas de vencimiento de las cuotas (para identificar segundo semestre)
+- Tipos de transacciones y sus descripciones
+- Montos de las transacciones para calcular promedios
+- Tasas de interés actuales de los tipos de transacción
+- Relación entre transacciones, cuotas y tipos de transacción
 
 3. ¿Cuál es el propósito de la solución que se requiere?
-Identificar los tipos de transacciones que tienen vencimientos en el segundo semestre
-y sus montos promedio, para aplicar una reducción en su tasa de interés.
+Obtener dos diferentes perspectivas (usando SET y subconsultas) del comportamiento de los tipos de 
+transacciones que tienen vencimientos en el segundo semestre, para identificar cuáles requieren un 
+ajuste en su tasa de interés, aplicando una reducción del 1% a aquellos tipos identificados.
 
-4. Pasos para construir la alternativa con SUBCONSULTA:
-- Identificar las tablas necesarias y sus relaciones
-- Crear subconsulta para filtrar transacciones del segundo semestre
-- Calcular promedios por tipo de transacción
-- Insertar resultados en tabla temporal
-- Actualizar tasas basado en los resultados
+4. Detallar los pasos para construir la alternativa que usa SUBCONSULTA:
+a) Identificar las tablas necesarias (tipo_transaccion_tarjeta, transaccion_tarjeta_cliente, 
+   cuota_transac_tarjeta_cliente)
+b) Construir la subconsulta para filtrar las transacciones con vencimientos en segundo semestre
+c) Realizar los JOIN necesarios entre las tablas
+d) Calcular los promedios agrupando por tipo de transacción
+e) Ordenar por el monto promedio de manera ascendente
+f) Insertar los resultados en la tabla seleccion_tipo_transaccion
+g) Actualizar las tasas de interés basado en los resultados almacenados
 
-5. Pasos para construir la alternativa con OPERADOR SET:
-- Identificar las tablas necesarias y sus relaciones
-- Unir las tablas con INNER JOINS
-- Filtrar por fechas del segundo semestre
-- Calcular promedios por tipo de transacción
-- Ordenar resultados por monto promedio
+5. Detallar los pasos para construir la alternativa que usa OPERADOR SET:
+a) Construir la primera consulta que obtiene transacciones del primer semestre
+b) Construir la segunda consulta que obtiene transacciones del segundo semestre
+c) Utilizar el operador MINUS para obtener solo los registros del segundo semestre
+d) Asegurar que ambas consultas tengan la misma estructura de columnas
+e) Incluir los cálculos de promedios y agrupaciones necesarias en cada subconsulta
+f) Ordenar el resultado final por monto promedio de manera ascendente
+g) Verificar que ambas consultas usen las mismas funciones para obtener fecha y redondeo
 */
